@@ -40,10 +40,25 @@
 
     <!-- Connection Status & Controls -->
     <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
+      <!-- Server Configuration -->
+      <div class="mb-4 pb-4 border-b border-gray-600">
+        <div class="flex flex-col sm:flex-row items-center gap-4">
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <label for="server-address" class="font-semibold whitespace-nowrap">Server:</label>
+            <input type="text" id="server-address" placeholder="e.g., 100.64.1.2:8000 or localhost:8000"
+              class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 sm:w-64">
+          </div>
+          <button id="server-connect-btn"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+            Connect to Server
+          </button>
+        </div>
+      </div>
+      
       <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="text-center sm:text-left">
           <span class="font-semibold">Your ID:</span>
-          <span id="my-id" class="bg-gray-700 text-green-400 px-3 py-1 rounded-md font-mono">Connecting...</span>
+          <span id="my-id" class="bg-gray-700 text-green-400 px-3 py-1 rounded-md font-mono">Not connected</span>
         </div>
         <div id="status" class="text-yellow-400 font-semibold">
           STATUS: Disconnected
@@ -105,6 +120,8 @@
     const remoteVideo = document.getElementById('remoteVideo');
     const localPlaceholder = document.getElementById('local-placeholder');
     const remotePlaceholder = document.getElementById('remote-placeholder');
+    const serverAddressInput = document.getElementById('server-address');
+    const serverConnectBtn = document.getElementById('server-connect-btn');
 
     // Use a publicly available STUN server
     const configuration = {
@@ -117,21 +134,32 @@
     let localStream;
 
     // --- WebSocket Signaling ---
-    function connectWebSocket() {
+    function connectWebSocket(serverAddress = null) {
       // Generate a simple unique ID for this client
       const clientId = `user-${Math.random().toString(36).substr(2, 9)}`;
       myId = clientId;
       myIdElement.textContent = myId;
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Replace with your server's address if not running locally
-      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/${clientId}`;
+      
+      let wsUrl;
+      if (serverAddress) {
+        // Use custom server address
+        wsUrl = `${wsProtocol}//${serverAddress}/ws/${clientId}`;
+      } else {
+        // Default to current hostname
+        wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/${clientId}`;
+      }
 
+      console.log(`Connecting to: ${wsUrl}`);
       websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
         console.log('WebSocket connection established.');
         updateStatus('Connected to server', 'text-green-400');
+        serverConnectBtn.textContent = 'Connected';
+        serverConnectBtn.disabled = true;
+        serverConnectBtn.className = 'bg-gray-600 text-white font-bold py-2 px-4 rounded-md cursor-not-allowed';
       };
 
       websocket.onmessage = (event) => {
@@ -157,12 +185,19 @@
       websocket.onclose = () => {
         console.log('WebSocket connection closed.');
         updateStatus('Disconnected from server', 'text-red-400');
-        // Optional: implement reconnection logic here
+        myIdElement.textContent = 'Not connected';
+        serverConnectBtn.textContent = 'Connect to Server';
+        serverConnectBtn.disabled = false;
+        serverConnectBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition duration-300';
       };
 
       websocket.onerror = (error) => {
         console.error('WebSocket error:', error);
         updateStatus('Connection Error', 'text-red-400');
+        myIdElement.textContent = 'Connection failed';
+        serverConnectBtn.textContent = 'Connect to Server';
+        serverConnectBtn.disabled = false;
+        serverConnectBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition duration-300';
       };
     }
 
@@ -324,8 +359,26 @@
 
     connectBtn.addEventListener('click', startConnection);
 
-    // Initialize WebSocket connection on page load
-    window.addEventListener('load', connectWebSocket);
+    // Server connection event listener
+    serverConnectBtn.addEventListener('click', () => {
+      const serverAddress = serverAddressInput.value.trim();
+      if (!serverAddress) {
+        alert('Please enter a server address (e.g., 100.64.1.2:8000)');
+        return;
+      }
+      
+      // Close existing connection if any
+      if (websocket) {
+        websocket.close();
+      }
+      
+      connectWebSocket(serverAddress);
+    });
+
+    // Set default server address
+    window.addEventListener('load', () => {
+      serverAddressInput.value = 'localhost:8000';
+    });
   </script>
 </body>
 
